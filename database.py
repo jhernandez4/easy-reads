@@ -6,10 +6,24 @@ from datetime import datetime
 
 load_dotenv()
 
+# User Model
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(index=True, unique=True)
+    email: str = Field(index=True, unique=True)
+    hashed_password: str
+
+    # Relationship: Users own multiple textbooks
+    textbooks: list["Textbook"] = Relationship(back_populates="owner")
+
 class Textbook(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")  # Track who owns the textbook
     title: str = Field(index=True)
     author: str
+
+    # Relationship to User (Many-to-one)
+    owner: User = Relationship(back_populates="textbooks")
 
     # Relationship to Chapters (one-to-many)
     chapters: list["Chapter"] = Relationship(back_populates="textbook")
