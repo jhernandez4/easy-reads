@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 import google.generativeai as genai
 from database import (
     get_session, create_db_and_tables, engine, Textbook, Chapter, 
-    Conversation, Response, Quiz, Question
+    Conversation, Response, Quiz, Question, User
 )
 from dotenv import load_dotenv
 import os
@@ -42,6 +42,19 @@ def get_password_hash(password):
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
+
+def get_user(username: str, session: SessionDep):
+    user = session.get(User, username)
+    if user:
+        return user
+
+def authenticate_user(username: str, password: str, session: SessionDep):
+    user = get_user(username, session)
+    if not user:
+        return False
+    if not verify_password(password, user.hashed_password):
+        return False
+    return user
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
