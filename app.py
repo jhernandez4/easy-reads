@@ -1,15 +1,12 @@
-import jwt
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from fastapi import FastAPI, Depends, HTTPException, Query, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jwt.exceptions import InvalidTokenError
-from passlib.context import CryptContext
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from typing import Annotated
 from sqlmodel import Session, select
 import google.generativeai as genai
 from database import (
-    get_session, create_db_and_tables, engine, Textbook, Chapter, 
+    get_session, create_db_and_tables, Textbook, Chapter, 
     Conversation, Response, Quiz, Question, User
 )
 from dotenv import load_dotenv

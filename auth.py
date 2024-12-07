@@ -1,5 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException, Query, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from pydantic import BaseModel
@@ -9,10 +9,7 @@ import jwt
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 import os
-from database import (
-    get_session, create_db_and_tables, engine, Textbook, Chapter, 
-    Conversation, Response, Quiz, Question, User
-)
+from database import get_session, User  
 
 load_dotenv()
 
