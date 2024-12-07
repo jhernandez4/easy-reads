@@ -15,6 +15,10 @@ import os
 
 load_dotenv()
 
+SECRET_KEY = os.environ.get('SECRET_KEY')
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
@@ -22,7 +26,16 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 # Dependency for session management
 SessionDep = Annotated[Session, Depends(get_session)]
 
+pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
+
 app = FastAPI()
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
 
 # Initialize database tables on startup
 @app.on_event("startup")
