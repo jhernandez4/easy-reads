@@ -53,7 +53,7 @@ def on_startup():
     create_db_and_tables()
 
 def get_user(username: str, session: SessionDep):
-    user = session.get(User, username)
+    user = session.exec(select(User).where(User.username == username)).first()
     if user:
         return user
 
