@@ -25,6 +25,12 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
+# Pydantic model for the request body
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -118,4 +124,47 @@ async def login_for_access_token(
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
+    return Token(access_token=access_token, token_type="bearer")
+
+@app.post("/signup", response_model=Token)
+async def sign_up(
+    user_create: UserCreate,
+    session: SessionDep) -> Token:
+    # Check if the username or email already exists
+    existing_user = session.exec(select(User).where(User.username == user_create.username)).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
+        )
+    
+    existing_email = session.exec(select(User).where(User.email == user_create.email)).first()
+
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Hash the password
+    hashed_password = get_password_hash(user_create.password)
+
+    # Create a new user instance
+    new_user = User(
+        username=user_create.username,
+        email=user_create.email,
+        hashed_password=hashed_password
+    )
+
+    # Save the new user to the database
+    session.add(new_user)
+    session.commit()
+    session.refresh(new_user) # Ensure the user instance is up to data after commit
+
+    # Generate the JWT token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": new_user.username}, expires_delta=access_token_expires
+    )
+
     return Token(access_token=access_token, token_type="bearer")
