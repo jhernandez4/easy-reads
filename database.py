@@ -20,7 +20,7 @@ class Textbook(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")  # Track who owns the textbook
     title: str = Field(index=True)
-    author: str
+    author: Optional[str] = Field(default=None, nullable=True)
 
     # Relationship to User (Many-to-one)
     owner: User = Relationship(back_populates="textbooks")
