@@ -94,7 +94,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], sessio
     except InvalidTokenError:
         raise credentials_exception
     
-    user = get_user(username=token_data.usenrame, session=session)
+    user = get_user(username=token_data.username, session=session)
     if user is None:
         raise credentials_exception
     return user
