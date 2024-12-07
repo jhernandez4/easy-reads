@@ -1,6 +1,7 @@
 from datetime import timedelta
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Annotated
 from sqlmodel import Session, select
@@ -13,7 +14,8 @@ from dotenv import load_dotenv
 import os
 from auth import (
     authenticate_user, create_access_token, get_password_hash,
-    TokenData, Token, ACCESS_TOKEN_EXPIRE_MINUTES
+    TokenData, Token, ACCESS_TOKEN_EXPIRE_MINUTES,
+    get_current_user
 )
 
 load_dotenv()
@@ -22,14 +24,20 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# Pydantic model for the request body
+# Pydantic models for the request body
 class UserCreate(BaseModel):
     username: str
     email: str
     password: str
 
+class TextbookCreate(BaseModel):
+    title: str
+    author: str | None = None
+
 # Dependency for session management
 SessionDep = Annotated[Session, Depends(get_session)]
+# Dependency that retrieves the current authenticated user
+UserDep = Annotated[User, Depends(get_current_user)]
 
 app = FastAPI()
 
@@ -101,3 +109,34 @@ async def sign_up(
     )
 
     return Token(access_token=access_token, token_type="bearer")
+
+@app.post("/create-textbook/")
+async def create_textbook(
+    textbook: TextbookCreate,
+    session: SessionDep,
+    current_user: UserDep 
+):
+    # Create and save the textbook associated with the current user
+    new_textbook = Textbook(
+        title=textbook.title,
+        author=textbook.author,
+        user_id=current_user.id
+    )
+
+    session.add(new_textbook)
+    session.commit()
+    session.refresh(new_textbook)
+
+    # Return a detailed HTTP response
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content={
+            "message": "Textbook created successfully",
+            "textbook": {
+                "id": new_textbook.id,
+                "title": new_textbook.title,
+                "author": new_textbook.author,
+                "user_id": new_textbook.user_id
+            }
+        }
+    )
