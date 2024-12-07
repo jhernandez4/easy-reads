@@ -34,17 +34,21 @@ pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
+# Helper function
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
+# Helper function
 def get_password_hash(password):
     return pwd_context.hash(password)
 
+# Helper function - get user from database given username
 def get_user(username: str, session: SessionDep):
     user = session.exec(select(User).where(User.username == username)).first()
     if user:
         return user
 
+# Check if user credentials exist in the database - login functionality 
 def authenticate_user(username: str, password: str, session: SessionDep):
     user = get_user(username, session)
     if not user:
@@ -53,6 +57,7 @@ def authenticate_user(username: str, password: str, session: SessionDep):
         return False
     return user
 
+# Create jwt token - for login and signup functionality
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
 
@@ -66,6 +71,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 
     return encoded_jwt
 
+# Check if user has valid credentials
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: SessionDep):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
