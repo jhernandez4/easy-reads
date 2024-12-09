@@ -180,23 +180,13 @@ async def get_all_textbooks(
 
 @app.post("/textbooks/{textbook_id}/chapters/")
 async def create_chapter(
-    textbook_id: int,
+    textbook: TextbookDep,
     chapter: ChapterCreate,
     session: SessionDep,
-    current_user: UserDep
 ):
-     # Check if the textbook exists and belongs to the current user
-    textbook = session.exec(
-        select(Textbook)
-        .where(Textbook.id == textbook_id, Textbook.user_id == current_user.id)
-    ).first()
-    
-    if not textbook:
-        raise HTTPException(status_code=404, detail="Textbook not found.")
-    
     new_chapter = Chapter(
         name = chapter.name,
-        textbook_id = textbook_id
+        textbook_id = textbook.id
     )
 
     # Add the chapter to the database and commit
