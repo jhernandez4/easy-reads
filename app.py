@@ -110,7 +110,7 @@ async def sign_up(
 
     return Token(access_token=access_token, token_type="bearer")
 
-@app.post("/create-textbook/")
+@app.post("/textbooks/")
 async def create_textbook(
     textbook: TextbookCreate,
     session: SessionDep,
