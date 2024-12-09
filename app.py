@@ -20,9 +20,17 @@ from auth import (
 
 load_dotenv()
 
+USER_ROLE = "user"
+AI_ROLE = "model"
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
+model = genai.GenerativeModel(
+    model_name="gemini-1.5-flash",
+    system_instruction= '''You are an AI study assistant. You will help explain 
+    excerpts of text chosen by the user that they are confused about. Provide
+    accurate explanations, focusing on helping the user resolve confusion.
+    ''' 
+)
 
 # Pydantic models for the request body
 class UserCreate(BaseModel):
@@ -36,6 +44,9 @@ class TextbookCreate(BaseModel):
 
 class ChapterCreate(BaseModel):
     name: str
+
+class PromptRequest(BaseModel):
+    text: str
 
 # Dependency for session management
 SessionDep = Annotated[Session, Depends(get_session)]
@@ -61,6 +72,15 @@ async def validate_user_owns_textbook(
 TextbookDep = Annotated[Textbook, Depends(validate_user_owns_textbook)]
 
 app = FastAPI()
+
+async def generate_title(prompt: str):
+    # Use smaller model for title generation
+    mini_model = genai.GenerativeModel("gemini-1.5-flash-8b")
+    response = await mini_model.generate_content_async(
+        f'Generate, in a few words, an appropriate title (that does NOT use Markdown) for the following text: {prompt}'
+    )
+
+    return response.text
 
 # Initialize database tables on startup
 @app.on_event("startup")
@@ -221,3 +241,49 @@ async def get_all_chapters(
         .limit(limit)).all()
 
     return chapters
+
+@app.post("/textbooks/{textbook_id}/chapters/{chapter_id}/conversations")
+async def create_conversation(
+    prompt: PromptRequest,
+    chapter_id: int,
+    session: SessionDep
+):
+    title = await generate_title(prompt.text)
+
+    new_conversation = Conversation(
+        title=title,
+        chapter_id=chapter_id,
+    )
+    
+    session.add(new_conversation)
+    session.commit()
+    session.refresh(new_conversation)
+
+
+    chat = model.start_chat(
+        history=[{"role": USER_ROLE, "parts": prompt.text}]
+    )
+
+    ai_response = await model.generate_content_async(prompt.text)
+
+    session.add_all([
+        Response(conversation_id=new_conversation.id, role=USER_ROLE, content=prompt.text),
+        Response(conversation_id=new_conversation.id, role=AI_ROLE, content=ai_response.text)
+    ])
+
+    session.commit()
+
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content={
+            "message": "Conversation started successfully",
+            "conversation": {
+                "id": new_conversation.id,
+                "title": new_conversation.title
+            },
+            "responses": [
+                {"role": USER_ROLE, "content": prompt.text},
+                {"role": AI_ROLE, "content": ai_response.text}
+            ]
+        }
+    )
