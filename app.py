@@ -34,10 +34,31 @@ class TextbookCreate(BaseModel):
     title: str
     author: str | None = None
 
+class ChapterCreate(BaseModel):
+    name: str
+
 # Dependency for session management
 SessionDep = Annotated[Session, Depends(get_session)]
 # Dependency that retrieves the current authenticated user
 UserDep = Annotated[User, Depends(get_current_user)]
+
+# Helper function that returns textbook from given textbook id
+async def validate_user_owns_textbook(
+    textbook_id: int, current_user: UserDep, session: SessionDep
+) -> Textbook:
+    textbook = session.exec(
+        select(Textbook)
+        .where(Textbook.id == textbook_id, Textbook.user_id == current_user.id)
+    ).first()
+
+    if not textbook:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Textbook not found or does not belong to the current user."
+        )
+    return textbook
+
+TextbookDep = Annotated[Textbook, Depends(validate_user_owns_textbook)]
 
 app = FastAPI()
 
@@ -110,7 +131,7 @@ async def sign_up(
 
     return Token(access_token=access_token, token_type="bearer")
 
-@app.post("/create-textbook/")
+@app.post("/textbooks/")
 async def create_textbook(
     textbook: TextbookCreate,
     session: SessionDep,
@@ -140,3 +161,63 @@ async def create_textbook(
             }
         }
     )
+
+@app.get("/textbooks/")
+async def get_all_textbooks(
+    session: SessionDep,
+    current_user: UserDep,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+) -> list[Textbook]:
+
+    textbooks = session.exec(
+        select(Textbook)
+        .where(Textbook.user_id == current_user.id)
+        .offset(offset)
+        .limit(limit)).all()
+
+    return textbooks
+
+@app.post("/textbooks/{textbook_id}/chapters/")
+async def create_chapter(
+    textbook: TextbookDep,
+    chapter: ChapterCreate,
+    session: SessionDep,
+):
+    new_chapter = Chapter(
+        name = chapter.name,
+        textbook_id = textbook.id
+    )
+
+    # Add the chapter to the database and commit
+    session.add(new_chapter)
+    session.commit()
+    
+    # Return the response as JSONResponse
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content={
+        "message": "Chapter created successfully",
+        "chapter": {
+            "id": new_chapter.id,
+            "name": new_chapter.name,
+            "textbook_id": new_chapter.textbook_id,
+            }
+        }
+    )
+
+@app.get("/textbooks/{textbook_id}/chapters/")
+async def get_all_chapters(
+    textbook: TextbookDep,
+    session: SessionDep,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+) -> list[Chapter]:
+
+    chapters = session.exec(
+        select(Chapter)
+        .where(Chapter.textbook_id == textbook.id)
+        .offset(offset)
+        .limit(limit)).all()
+
+    return chapters
