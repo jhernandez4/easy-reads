@@ -42,7 +42,7 @@ SessionDep = Annotated[Session, Depends(get_session)]
 # Dependency that retrieves the current authenticated user
 UserDep = Annotated[User, Depends(get_current_user)]
 
-# Helper function
+# Helper function that returns textbook from given textbook id
 async def validate_user_owns_textbook(
     textbook_id: int, current_user: UserDep, session: SessionDep
 ) -> Textbook:
