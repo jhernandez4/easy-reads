@@ -46,6 +46,7 @@ class Chapter(SQLModel, table=True):
 
 class Conversation(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    title: str = Field(max_length=255)
     chapter_id: int = Field(foreign_key="chapter.id")
     start_time: datetime = Field(default_factory=datetime.utcnow)
     end_time: Optional[datetime] = None
