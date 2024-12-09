@@ -42,6 +42,24 @@ SessionDep = Annotated[Session, Depends(get_session)]
 # Dependency that retrieves the current authenticated user
 UserDep = Annotated[User, Depends(get_current_user)]
 
+# Helper function
+async def validate_user_owns_textbook(
+    textbook_id: int, current_user: UserDep, session: SessionDep
+) -> Textbook:
+    textbook = session.exec(
+        select(Textbook)
+        .where(Textbook.id == textbook_id, Textbook.user_id == current_user.id)
+    ).first()
+
+    if not textbook:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Textbook not found or does not belong to the current user."
+        )
+    return textbook
+
+TextbookDep = Annotated[Textbook, Depends(validate_user_owns_textbook)]
+
 app = FastAPI()
 
 # Initialize database tables on startup
@@ -197,3 +215,19 @@ async def create_chapter(
             }
         }
     )
+
+@app.get("/textbooks/{textbook_id}/chapters/")
+async def get_all_chapters(
+    textbook: TextbookDep,
+    session: SessionDep,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+) -> list[Chapter]:
+
+    chapters = session.exec(
+        select(Chapter)
+        .where(Chapter.textbook_id == textbook.id)
+        .offset(offset)
+        .limit(limit)).all()
+
+    return chapters
