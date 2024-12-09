@@ -60,7 +60,7 @@ class Conversation(SQLModel, table=True):
 class Response(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     conversation_id: int = Field(foreign_key="conversation.id")
-    role: str  # Either 'user' or 'ai'
+    role: str  # Either 'user' or 'model'
     content: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
