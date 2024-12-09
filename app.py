@@ -37,6 +37,13 @@ class TextbookCreate(BaseModel):
 class ChapterCreate(BaseModel):
     name: str
 
+class TextbookUpdate(BaseModel):
+    title: str | None = None
+    author: str | None = None
+
+class ChapterUpdate(BaseModel):
+    name: str | None = None
+
 # Dependency for session management
 SessionDep = Annotated[Session, Depends(get_session)]
 # Dependency that retrieves the current authenticated user
@@ -221,3 +228,118 @@ async def get_all_chapters(
         .limit(limit)).all()
 
     return chapters
+
+# Update textbook's title and/or author
+@app.put("/textbooks/{textbook_id}")
+async def update_textbook(
+    textbook: TextbookDep,
+    textbook_update: TextbookUpdate,
+    session: SessionDep,
+):
+    if textbook_update.title is not None:
+        textbook.title = textbook_update.title
+    if textbook_update.author is not None:
+        textbook.author = textbook_update.author
+
+    session.add(textbook)
+    session.commit()
+    session.refresh(textbook)
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "message": "Textbook updated successfully",
+            "textbook": {
+                "id": textbook.id,
+                "title": textbook.title,
+                "author": textbook.author,
+                "user_id": textbook.user_id
+            }
+        }
+    )
+
+# Delete textbook and its chapters
+@app.delete("/textbooks/{textbook_id}")
+async def delete_textbook(
+    textbook: TextbookDep,
+    session: SessionDep,
+):
+    session.exec(
+        select(Chapter).where(Chapter.textbook_id == textbook.id)
+    ).delete()
+    
+    session.delete(textbook)
+    session.commit()
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "message": "Textbook and its chapters deleted successfully"
+        }
+    )
+
+# Validate chapter belongs to textbook
+async def validate_chapter_ownership(
+    chapter_id: int,
+    textbook: TextbookDep,
+    session: SessionDep,
+) -> Chapter:
+    chapter = session.exec(
+        select(Chapter)
+        .where(Chapter.id == chapter_id, Chapter.textbook_id == textbook.id)
+    ).first()
+
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chapter not found or does not belong to the specified textbook."
+        )
+    return chapter
+
+# Update chapter name
+@app.put("/textbooks/{textbook_id}/chapters/{chapter_id}")
+async def update_chapter(
+    chapter_id: int,
+    textbook: TextbookDep,
+    chapter_update: ChapterUpdate,
+    session: SessionDep,
+):
+    chapter = await validate_chapter_ownership(chapter_id, textbook, session)
+
+    if chapter_update.name is not None:
+        chapter.name = chapter_update.name
+
+    session.add(chapter)
+    session.commit()
+    session.refresh(chapter)
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "message": "Chapter updated successfully",
+            "chapter": {
+                "id": chapter.id,
+                "name": chapter.name,
+                "textbook_id": chapter.textbook_id
+            }
+        }
+    )
+
+# Delete specific chapter
+@app.delete("/textbooks/{textbook_id}/chapters/{chapter_id}")
+async def delete_chapter(
+    chapter_id: int,
+    textbook: TextbookDep,
+    session: SessionDep,
+):
+    chapter = await validate_chapter_ownership(chapter_id, textbook, session)
+    
+    session.delete(chapter)
+    session.commit()
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "message": "Chapter deleted successfully"
+        }
+    )
