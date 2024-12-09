@@ -34,6 +34,9 @@ class TextbookCreate(BaseModel):
     title: str
     author: str | None = None
 
+class ChapterCreate(BaseModel):
+    name: str
+
 # Dependency for session management
 SessionDep = Annotated[Session, Depends(get_session)]
 # Dependency that retrieves the current authenticated user
@@ -156,3 +159,41 @@ async def get_all_textbooks(
         .limit(limit)).all()
 
     return textbooks
+
+@app.post("/textbooks/{textbook_id}/chapters/")
+async def create_chapter(
+    textbook_id: int,
+    chapter: ChapterCreate,
+    session: SessionDep,
+    current_user: UserDep
+):
+     # Check if the textbook exists and belongs to the current user
+    textbook = session.exec(
+        select(Textbook)
+        .where(Textbook.id == textbook_id, Textbook.user_id == current_user.id)
+    ).first()
+    
+    if not textbook:
+        raise HTTPException(status_code=404, detail="Textbook not found.")
+    
+    new_chapter = Chapter(
+        name = chapter.name,
+        textbook_id = textbook_id
+    )
+
+    # Add the chapter to the database and commit
+    session.add(new_chapter)
+    session.commit()
+    
+    # Return the response as JSONResponse
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content={
+        "message": "Chapter created successfully",
+        "chapter": {
+            "id": new_chapter.id,
+            "name": new_chapter.name,
+            "textbook_id": new_chapter.textbook_id,
+            }
+        }
+    )
