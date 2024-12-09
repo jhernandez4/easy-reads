@@ -264,9 +264,12 @@ async def delete_textbook(
     textbook: TextbookDep,
     session: SessionDep,
 ):
-    session.exec(
+    chapters = session.exec(
         select(Chapter).where(Chapter.textbook_id == textbook.id)
-    ).delete()
+    ).all()
+
+    for chapter in chapters:
+        session.delete(chapter)
     
     session.delete(textbook)
     session.commit()
