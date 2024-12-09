@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field, Session, create_engine, select, Relationship, Column
 from sqlalchemy.types import Text
-from typing import Optional, Annotated
+from typing import Optional, Annotated, Literal
 import os
 from dotenv import load_dotenv
 from datetime import datetime
@@ -61,7 +61,7 @@ class Conversation(SQLModel, table=True):
 class Response(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     conversation_id: int = Field(foreign_key="conversation.id")
-    role: str  # Either 'user' or 'model'
+    role: Literal["user", "model"]  # Restrict role to 'user' or 'model'
     content: str = Field(sa_column=Column(Text))
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
