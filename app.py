@@ -140,3 +140,19 @@ async def create_textbook(
             }
         }
     )
+
+@app.get("/textbooks/")
+async def get_all_textbooks(
+    session: SessionDep,
+    current_user: UserDep,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+) -> list[Textbook]:
+
+    textbooks = session.exec(
+        select(Textbook)
+        .where(Textbook.user_id == current_user.id)
+        .offset(offset)
+        .limit(limit)).all()
+
+    return textbooks
