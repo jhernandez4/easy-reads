@@ -1,4 +1,5 @@
-from sqlmodel import SQLModel, Field, Session, create_engine, select, Relationship
+from sqlmodel import SQLModel, Field, Session, create_engine, select, Relationship, Column
+from sqlalchemy.types import Text
 from typing import Optional, Annotated
 import os
 from dotenv import load_dotenv
@@ -61,7 +62,7 @@ class Response(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     conversation_id: int = Field(foreign_key="conversation.id")
     role: str  # Either 'user' or 'model'
-    content: str
+    content: str = Field(sa_column=Column(Text))
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationship to Conversation (many-to-one)
@@ -70,7 +71,7 @@ class Response(SQLModel, table=True):
 class Quiz(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     chapter_id: int = Field(foreign_key="chapter.id")
-    title: str  # Title of the quiz
+    content: str = Field(sa_column=Column(Text))
     created_at: datetime = Field(default_factory=datetime.utcnow)  # Timestamp for when the quiz was created
 
     # Relationship to Questions (one-to-many)
@@ -82,7 +83,7 @@ class Quiz(SQLModel, table=True):
 class Question(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     quiz_id: int = Field(foreign_key="quiz.id")
-    content: str  # The actual question content
+    content: str = Field(sa_column=Column(Text))
     question_type: str  # E.g., 'multiple choice', 'true/false', 'open-ended'
     correct_answer: str  # The correct answer for the question
 
