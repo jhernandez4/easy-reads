@@ -260,50 +260,6 @@ async def get_all_textbooks(
 
     return textbooks
 
-@app.post("/textbooks/{textbook_id}/chapters")
-async def create_chapter(
-    textbook: TextbookDep,
-    chapter: ChapterCreate,
-    session: SessionDep,
-):
-    new_chapter = Chapter(
-        name = chapter.name,
-        textbook_id = textbook.id
-    )
-
-    # Add the chapter to the database and commit
-    session.add(new_chapter)
-    session.commit()
-    
-    # Return the response as JSONResponse
-    return JSONResponse(
-        status_code=status.HTTP_201_CREATED,
-        content={
-        "message": "Chapter created successfully",
-        "chapter": {
-            "id": new_chapter.id,
-            "name": new_chapter.name,
-            "textbook_id": new_chapter.textbook_id,
-            }
-        }
-    )
-
-@app.get("/textbooks/{textbook_id}/chapters")
-async def get_all_chapters(
-    textbook: TextbookDep,
-    session: SessionDep,
-    offset: int = 0,
-    limit: Annotated[int, Query(le=100)] = 100,
-) -> list[Chapter]:
-
-    chapters = session.exec(
-        select(Chapter)
-        .where(Chapter.textbook_id == textbook.id)
-        .offset(offset)
-        .limit(limit)).all()
-
-    return chapters
-
 # Update textbook's title and/or author
 @app.put("/textbooks/{textbook_id}")
 async def update_textbook(
@@ -355,6 +311,50 @@ async def delete_textbook(
             "message": "Textbook and its chapters deleted successfully"
         }
     )
+
+@app.post("/textbooks/{textbook_id}/chapters")
+async def create_chapter(
+    textbook: TextbookDep,
+    chapter: ChapterCreate,
+    session: SessionDep,
+):
+    new_chapter = Chapter(
+        name = chapter.name,
+        textbook_id = textbook.id
+    )
+
+    # Add the chapter to the database and commit
+    session.add(new_chapter)
+    session.commit()
+    
+    # Return the response as JSONResponse
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content={
+        "message": "Chapter created successfully",
+        "chapter": {
+            "id": new_chapter.id,
+            "name": new_chapter.name,
+            "textbook_id": new_chapter.textbook_id,
+            }
+        }
+    )
+
+@app.get("/textbooks/{textbook_id}/chapters")
+async def get_all_chapters(
+    textbook: TextbookDep,
+    session: SessionDep,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+) -> list[Chapter]:
+
+    chapters = session.exec(
+        select(Chapter)
+        .where(Chapter.textbook_id == textbook.id)
+        .offset(offset)
+        .limit(limit)).all()
+
+    return chapters
 
 # Update chapter name
 @app.put("/textbooks/{textbook_id}/chapters/{chapter_id}")
