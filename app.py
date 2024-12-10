@@ -466,3 +466,80 @@ async def delete_chapter(
             "message": "Chapter deleted successfully"
         }
     )
+
+# Delete a conversation and all messages within it
+@app.delete("/textbooks/{textbook_id}/chapters/{chapter_id}/conversations/{conversation_id}")
+async def delete_conversation(
+    textbook_id: int,
+    chapter_id: int,
+    conversation_id: int,
+    session: SessionDep,
+    current_user: UserDep
+):
+    # Check if textbook belongs to the current user
+    textbook = await validate_user_owns_textbook(textbook_id, current_user, session)
+    
+    # Check if chapter belongs to the textbook
+    chapter = await validate_chapter_ownership(chapter_id, textbook, session)
+
+    # Get convo
+    conversation = session.exec(
+        select(Conversation)
+        .where(Conversation.id == conversation_id, Conversation.chapter_id == chapter.id)
+    ).first()
+
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+
+    # Delete all related responses
+    responses = session.exec(
+        select(Response).where(Response.conversation_id == conversation.id)
+    ).all()
+
+    for response in responses:
+        session.delete(response)
+
+    # Delete convo itself
+    session.delete(conversation)
+    session.commit()
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"message": "Conversation and all related messages has been deleted successfully."}
+    )
+
+# View all conversations
+@app.get("/textbooks/{textbook_id}/chapters/{chapter_id}/conversations/")
+async def get_all_conversations(
+    textbook_id: int,
+    chapter_id: int,
+    session: SessionDep,
+    current_user: UserDep,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+):
+    # Check if textbook belongs to current user
+    textbook = await validate_user_owns_textbook(textbook_id, current_user, session)
+
+    # Check if chapter belongs to textbook
+    chapter = await validate_chapter_ownership(chapter_id, textbook, session)
+
+    # Get convo related with chapter
+    conversations = session.exec(
+        select(Conversation)
+        .where(Conversation.chapter_id == chapter.id)
+        .offset(offset)
+        .limit(limit)
+    ).all()
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"conversations": [
+            {
+                "id": conversation.id,
+                "title": conversation.title,
+                "start_time": conversation.start_time,
+                "end_time": conversation.end_time
+            } for conversation in conversations
+        ]}
+    )
