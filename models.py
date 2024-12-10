@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 class UserCreate(BaseModel):
     username: str
@@ -22,3 +23,11 @@ class TextbookUpdate(BaseModel):
 
 class ChapterUpdate(BaseModel):
     name: Optional[str] = None
+
+class ConversationCreate(BaseModel):
+    title: Optional[str] = None
+    chapter_id: int
+
+class QuizCreate(BaseModel):
+    title: str
+    chapter_id: int

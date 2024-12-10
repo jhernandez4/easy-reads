@@ -1,6 +1,6 @@
 import os
 import json
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Annotated
 
 from fastapi import FastAPI, Depends, HTTPException, Query, status
@@ -619,7 +619,6 @@ async def get_all_conversations(
 async def generate_quiz(
     chapter: ChapterDep,
     session: SessionDep,
-    cache: CacheServiceDep,
 ) -> JSONResponse:
     conversations = session.exec(
         select(Conversation).where(Conversation.chapter_id == chapter.id)
@@ -637,41 +636,35 @@ async def generate_quiz(
     quiz_data = await generate_quiz_questions(chapter_content)
     try:
         quiz_list = json.loads(quiz_data)
+        new_quiz = Quiz(
+            title=f"Quiz for {chapter.name}",
+            chapter_id=chapter.id,
+            created_at=datetime.utcnow()
+        )
+        session.add(new_quiz)
+        session.flush()
+
+        questions = []
+        for question in quiz_list:
+            new_question = Question(
+                quiz_id=new_quiz.id,
+                content=question["content"],
+                correct_answer=question["correct_answer"],
+                question_type=question.get("question_type", "open-ended")
+            )
+            session.add(new_question)
+            questions.append({
+                "content": question["content"],
+                "correct_answer": question["correct_answer"],
+                "question_type": question.get("question_type", "open-ended")
+            })
+
+        session.commit()
+        return {
+            "id": new_quiz.id,
+            "title": new_quiz.title,
+            "chapter_id": chapter.id,
+            "questions": questions
+        }
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Failed to create a quiz for this chapter")
-
-    new_quiz = Quiz(content=chapter.name, chapter_id=chapter.id)
-    session.add(new_quiz)
-    session.commit()
-    session.refresh(new_quiz)
-
-    questions = []
-    for question in quiz_list:
-        new_question = Question(
-            quiz_id=new_quiz.id,
-            content=question["content"],
-            correct_answer=question["correct_answer"],
-            question_type=question.get("question_type", "open-ended")
-        )
-        session.add(new_question)
-        questions.append({
-            "content": question["content"],
-            "correct_answer": question["correct_answer"],
-            "question_type": question.get("question_type", "open-ended")
-        })
-    
-    session.commit()
-    await cache.invalidate_pattern(f"{CacheType.QUIZ.value}:*")
-    
-    return JSONResponse(
-        status_code=201, 
-        content={
-            "message": "Quiz created successfully",
-            "quiz": {
-                "id": new_quiz.id,
-                "content": new_quiz.content,
-                "chapter_id": new_quiz.chapter_id,
-                "questions": questions
-            }
-        }
-    )
