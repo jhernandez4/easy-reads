@@ -1,5 +1,11 @@
 # Easy Reads
 
+### Group Members
+Joksan Hernandez
+Baraa Damer
+Ugo Ndupu
+Paul Bagabaldo
+
 ## Project Setup
 
 ### 1. Clone the Repo
