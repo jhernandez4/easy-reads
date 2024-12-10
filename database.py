@@ -1,4 +1,5 @@
 from sqlmodel import SQLModel, Field, Session, create_engine, select, Relationship, Column
+from sqlalchemy import Enum
 from sqlalchemy.types import Text
 from typing import Optional, Annotated, Literal
 import os
@@ -61,7 +62,7 @@ class Conversation(SQLModel, table=True):
 class Response(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     conversation_id: int = Field(foreign_key="conversation.id")
-    role: Literal["user", "model"]  # Restrict role to 'user' or 'model'
+    role: str # 'user' or 'model' only
     content: str = Field(sa_column=Column(Text))
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
