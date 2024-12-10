@@ -85,8 +85,8 @@ class Question(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     quiz_id: int = Field(foreign_key="quiz.id")
     content: str = Field(sa_column=Column(Text))
-    question_type: str  # E.g., 'multiple choice', 'true/false', 'open-ended'
-    correct_answer: str  # The correct answer for the question
+    question_type: str # E.g., 'multiple choice', 'true/false', 'open-ended'
+    correct_answer: str = Field(sa_column=Column(Text)) # The correct answer for the question
 
     # Relationship to Quiz (many-to-one)
     quiz: Quiz = Relationship(back_populates="questions")
