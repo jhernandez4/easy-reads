@@ -287,3 +287,57 @@ async def create_conversation(
             ]
         }
     )
+
+@app.post("/textbooks/{textbook_id}/chapters/{chapter_id}/conversations/{conversation_id}/messages")
+async def send_message(
+    conversation_id: int,
+    prompt: PromptRequest,
+    session: SessionDep
+):
+    # Fetch conversation
+    conversation = session.exec(
+        select(Conversation).where(Conversation.id == conversation_id)
+    ).first()
+
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+
+    # Retrieve chat history from the database
+    history = session.exec(
+        select(Response)
+        .where(Response.conversation_id == conversation_id)
+        .order_by(Response.timestamp)
+    ).all()
+
+    # Convert history to Gemini-compatible format
+    chat_history = [{"role": resp.role, "parts": resp.content} for resp in history]
+
+    # Reinitialize the Gemini chat
+    chat = model.start_chat(history=chat_history)
+
+    # Send the user's message to Gemini
+    ai_response = chat.send_message(prompt.text)
+
+    # Save the new user and AI responses to the database
+    session.add_all([
+        Response(conversation_id=conversation_id, role=USER_ROLE, content=prompt.text),
+        Response(conversation_id=conversation_id, role=AI_ROLE, content=ai_response.text)
+    ])
+    session.commit()
+
+    # Retrieve updated chat history
+    updated_history = session.exec(
+        select(Response)
+        .where(Response.conversation_id == conversation_id)
+        .order_by(Response.timestamp)
+    ).all()
+
+    chat_history = [{"role": resp.role, "content": resp.content} for resp in updated_history]
+
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content={
+            "message": "Message sent sucessfully",
+            "history": chat_history
+        }
+    )
