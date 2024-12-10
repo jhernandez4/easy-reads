@@ -130,16 +130,19 @@ async def generate_quiz_questions(prompt: str):
             - "question_type": A type identifier,"open-ended", of the question. Choose the question type based on the content
             of the conversation.
 
-            Here is an example of how the output should be structured:
+            Output the quiz questions as plain string, not in a Markdown code block. Here is an example of how the output should be structured:
 
             [
                 {"content": "What is a derivative?", "correct_answer": "The rate of change of a function", "question_type": "open-ended"},
                 {"content": "Explain concurrency.", "correct_answer": "Concurrency allows tasks to make progress without running simultaneously.", "question_type": "open-ended"}
             ]
+
         """
     ) 
 
     response = await quiz_model.generate_content_async(prompt)
+
+    return response.text
 
 # Initialize database tables on startup
 @app.on_event("startup")
@@ -544,7 +547,7 @@ async def delete_conversation(
     )
 
 # View all conversations
-@app.get("/textbooks/{textbook_id}/chapters/{chapter_id}/conversations/")
+@app.get("/textbooks/{textbook_id}/chapters/{chapter_id}/conversations")
 async def get_all_conversations(
     textbook_id: int,
     chapter_id: int,
@@ -573,8 +576,8 @@ async def get_all_conversations(
             {
                 "id": conversation.id,
                 "title": conversation.title,
-                "start_time": conversation.start_time,
-                "end_time": conversation.end_time
+                "start_time": conversation.start_time.isoformat() if conversation.start_time else None,
+                "end_time": conversation.end_time.isoformat() if conversation.end_time else None
             } for conversation in conversations
         ]}
     )
@@ -583,7 +586,6 @@ async def get_all_conversations(
 async def generate_quiz(
     chapter: ChapterDep,
     session: SessionDep,
-    current_user: UserDep
 ):
     conversations = session.exec(
         select(Conversation).where(Conversation.chapter_id == chapter.id)
@@ -599,8 +601,8 @@ async def generate_quiz(
     )
 
     # Send the content to the AI to generate quiz questions
-    quiz_data = generate_quiz_questions(chapter_content)
-
+    quiz_data = await generate_quiz_questions(chapter_content)
+    print(quiz_data)
     # Attempt to load the generated JSON data
     try:
         quiz_dict = json.loads(quiz_data)
