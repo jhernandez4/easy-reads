@@ -17,6 +17,7 @@ from auth import (
     TokenData, Token, ACCESS_TOKEN_EXPIRE_MINUTES,
     get_current_user
 )
+import json
 
 load_dotenv()
 
@@ -78,6 +79,26 @@ async def validate_user_owns_textbook(
 
 TextbookDep = Annotated[Textbook, Depends(validate_user_owns_textbook)]
 
+# Validate chapter belongs to textbook
+async def validate_chapter_ownership(
+    chapter_id: int,
+    textbook: TextbookDep,
+    session: SessionDep,
+) -> Chapter:
+    chapter = session.exec(
+        select(Chapter)
+        .where(Chapter.id == chapter_id, Chapter.textbook_id == textbook.id)
+    ).first()
+
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chapter not found or does not belong to the specified textbook."
+        )
+    return chapter
+
+ChapterDep = Annotated[Chapter, Depends(validate_chapter_ownership)]
+
 app = FastAPI()
 
 async def generate_title(prompt: str):
@@ -88,6 +109,37 @@ async def generate_title(prompt: str):
     )
 
     return response.text
+
+async def generate_quiz_questions(prompt: str):
+    quiz_model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash",
+        system_instruction="""
+            You are an AI study assistant designed to help learners review material. You will be given a list of messages 
+            between an AI model and a user. Each message will be a dictionary with the following structure:
+            - "role": The role of the speaker, either "user" or "model".
+            - "parts": The text of the message.
+
+            Based on the conversation, your task is to generate quiz questions that assess key concepts or information discussed 
+            during the chat. These questions should be focused on helping the learner review and test their understanding of 
+            the material. And all these messages are from a single chapter of a textbook.
+
+            The quiz questions should be formatted as a list of dictionaries, where each dictionary represents a question 
+            and its correct answer. Each dictionary should contain the following fields:
+            - "content": A clear, concise question based on the conversation.
+            - "correct_answer": The correct answer to the question, derived from the conversation.
+            - "question_type": A type identifier,"open-ended", of the question. Choose the question type based on the content
+            of the conversation.
+
+            Here is an example of how the output should be structured:
+
+            [
+                {"content": "What is a derivative?", "correct_answer": "The rate of change of a function", "question_type": "open-ended"},
+                {"content": "Explain concurrency.", "correct_answer": "Concurrency allows tasks to make progress without running simultaneously.", "question_type": "open-ended"}
+            ]
+        """
+    ) 
+
+    response = await quiz_model.generate_content_async(prompt)
 
 # Initialize database tables on startup
 @app.on_event("startup")
@@ -401,23 +453,6 @@ async def delete_textbook(
         }
     )
 
-# Validate chapter belongs to textbook
-async def validate_chapter_ownership(
-    chapter_id: int,
-    textbook: TextbookDep,
-    session: SessionDep,
-) -> Chapter:
-    chapter = session.exec(
-        select(Chapter)
-        .where(Chapter.id == chapter_id, Chapter.textbook_id == textbook.id)
-    ).first()
-
-    if not chapter:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Chapter not found or does not belong to the specified textbook."
-        )
-    return chapter
 
 # Update chapter name
 @app.put("/textbooks/{textbook_id}/chapters/{chapter_id}")
@@ -543,3 +578,50 @@ async def get_all_conversations(
             } for conversation in conversations
         ]}
     )
+
+@app.post("/textbooks/{textbook_id}/chapters/{chapter_id}/quizzes")
+async def generate_quiz(
+    chapter: ChapterDep,
+    session: SessionDep,
+    current_user: UserDep
+):
+    conversations = session.exec(
+        select(Conversation).where(Conversation.chapter_id == chapter.id)
+    ).all()
+
+    if not conversations:
+        raise HTTPException(status_code=404, detail="No conversations found for this chapter,")
+    
+    chapter_content = " ".join(
+        f"{response.role}: {response.content}"
+        for conversation in conversations
+        for response in conversation.responses
+    )
+
+    # Send the content to the AI to generate quiz questions
+    quiz_data = generate_quiz_questions(chapter_content)
+
+    # Attempt to load the generated JSON data
+    try:
+        quiz_dict = json.loads(quiz_data)
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Failed to create a quiz for this chapter.")
+
+    # Create the quiz 
+    new_quiz = Quiz(content=chapter.name, chapter_id=chapter.id)
+    session.add(new_quiz)
+    session.commit()
+    session.refresh(new_quiz)
+
+    # Add generated questions to the quiz
+    for question in quiz_dict:
+        new_question = Question(
+            quiz_id=new_quiz.id,
+            content=question["content"],
+            correct_answer=question["correct_answer"],
+            question_type=question.get("question_type", "open-ended")
+        )
+        session.add(new_question)
+    
+    session.commit()
