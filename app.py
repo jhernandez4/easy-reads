@@ -213,7 +213,7 @@ async def sign_up(
 
     return Token(access_token=access_token, token_type="bearer")
 
-@app.post("/textbooks/")
+@app.post("/textbooks")
 async def create_textbook(
     textbook: TextbookCreate,
     session: SessionDep,
@@ -244,7 +244,7 @@ async def create_textbook(
         }
     )
 
-@app.get("/textbooks/")
+@app.get("/textbooks")
 async def get_all_textbooks(
     session: SessionDep,
     current_user: UserDep,
@@ -260,7 +260,7 @@ async def get_all_textbooks(
 
     return textbooks
 
-@app.post("/textbooks/{textbook_id}/chapters/")
+@app.post("/textbooks/{textbook_id}/chapters")
 async def create_chapter(
     textbook: TextbookDep,
     chapter: ChapterCreate,
@@ -288,7 +288,7 @@ async def create_chapter(
         }
     )
 
-@app.get("/textbooks/{textbook_id}/chapters/")
+@app.get("/textbooks/{textbook_id}/chapters")
 async def get_all_chapters(
     textbook: TextbookDep,
     session: SessionDep,
