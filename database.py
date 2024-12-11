@@ -1,5 +1,7 @@
-from sqlmodel import SQLModel, Field, Session, create_engine, select, Relationship
-from typing import Optional, Annotated
+from sqlmodel import SQLModel, Field, Session, create_engine, select, Relationship, Column
+from sqlalchemy import Enum
+from sqlalchemy.types import Text
+from typing import Optional, Annotated, Literal
 import os
 from dotenv import load_dotenv
 from datetime import datetime
@@ -46,7 +48,7 @@ class Chapter(SQLModel, table=True):
 
 class Conversation(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    title: str 
+    title: str = Field(max_length=255)
     chapter_id: int = Field(foreign_key="chapter.id")
     start_time: datetime = Field(default_factory=datetime.utcnow)
     end_time: Optional[datetime] = None
@@ -60,8 +62,8 @@ class Conversation(SQLModel, table=True):
 class Response(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     conversation_id: int = Field(foreign_key="conversation.id")
-    role: str  # Either 'user' or 'ai'
-    content: str
+    role: str # 'user' or 'model' only
+    content: str = Field(sa_column=Column(Text))
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationship to Conversation (many-to-one)
@@ -70,7 +72,7 @@ class Response(SQLModel, table=True):
 class Quiz(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     chapter_id: int = Field(foreign_key="chapter.id")
-    title: str  # Title of the quiz
+    content: str = Field(sa_column=Column(Text))
     created_at: datetime = Field(default_factory=datetime.utcnow)  # Timestamp for when the quiz was created
 
     # Relationship to Questions (one-to-many)
@@ -82,9 +84,9 @@ class Quiz(SQLModel, table=True):
 class Question(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     quiz_id: int = Field(foreign_key="quiz.id")
-    content: str  # The actual question content
-    question_type: str  # E.g., 'multiple choice', 'true/false', 'open-ended'
-    correct_answer: str  # The correct answer for the question
+    content: str = Field(sa_column=Column(Text))
+    question_type: str # E.g., 'multiple choice', 'true/false', 'open-ended'
+    correct_answer: str = Field(sa_column=Column(Text)) # The correct answer for the question
 
     # Relationship to Quiz (many-to-one)
     quiz: Quiz = Relationship(back_populates="questions")

@@ -31,8 +31,10 @@ from models import (
     UserCreate, TextbookCreate, ChapterCreate,
     PromptRequest, TextbookUpdate, ChapterUpdate
 )
+import json
 
 load_dotenv()
+
 
 app = FastAPI()
 
@@ -87,6 +89,7 @@ async def validate_user_owns_textbook(
 
 TextbookDep = Annotated[Textbook, Depends(validate_user_owns_textbook)]
 
+# Validate chapter belongs to textbook
 async def validate_chapter_ownership(
     chapter_id: int,
     textbook: TextbookDep,
@@ -106,14 +109,16 @@ async def validate_chapter_ownership(
 
 ChapterDep = Annotated[Chapter, Depends(validate_chapter_ownership)]
 
-async def generate_title(prompt: str) -> str:
+async def generate_title(prompt: str):
+    # Use smaller model for title generation
     mini_model = genai.GenerativeModel("gemini-1.5-flash-8b")
     response = await mini_model.generate_content_async(
         f'Generate, in a few words, an appropriate title (that does NOT use Markdown) for the following text: {prompt}'
     )
+
     return response.text
 
-async def generate_quiz_questions(chapter_content: str) -> str:
+async def generate_quiz_questions(prompt: str):
     quiz_model = genai.GenerativeModel(
         model_name="gemini-1.5-flash",
         system_instruction="""
@@ -139,23 +144,15 @@ async def generate_quiz_questions(chapter_content: str) -> str:
                 {"content": "What is a derivative?", "correct_answer": "The rate of change of a function", "question_type": "open-ended"},
                 {"content": "Explain concurrency.", "correct_answer": "Concurrency allows tasks to make progress without running simultaneously.", "question_type": "open-ended"}
             ]
-        """
-    )
-    
-    prompt = f"""Based on this content, generate 5 quiz questions:
-    {chapter_content}"""
-    
-    response = await quiz_model.generate_content_async(prompt)
-    
-    try:
-        quiz_data = json.loads(response.text)
-        return json.dumps(quiz_data)
-    except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=400,
-            detail="Failed to generate valid quiz questions"
-        )
 
+        """
+    ) 
+
+    response = await quiz_model.generate_content_async(prompt)
+
+    return response.text
+
+# Initialize database tables on startup
 @app.on_event("startup")
 def on_startup() -> None:
     create_db_and_tables()
@@ -375,6 +372,7 @@ async def create_chapter(
 @cache_service.cache_decorator(CacheType.CHAPTER)
 async def get_all_chapters(
     textbook: TextbookDep,
+    chapter: ChapterCreate,
     session: SessionDep,
     offset: int = 0,
     limit: Annotated[int, Query(le=100)] = 100,
@@ -666,5 +664,6 @@ async def generate_quiz(
             "chapter_id": chapter.id,
             "questions": questions
         }
+
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Failed to create a quiz for this chapter")
