@@ -10,9 +10,6 @@ from sqlmodel import Session, select
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-from sqlmodel import SQLModel
-from database import engine
-
 from database import (
     get_session, create_db_and_tables, 
     Textbook, Chapter, Conversation, 
@@ -156,11 +153,6 @@ async def generate_quiz_questions(prompt: str):
 @app.on_event("startup")
 def on_startup() -> None:
     create_db_and_tables()
-
-# For testing purposes, we can drop all tables on shutdown
-@app.on_event("shutdown")
-async def shutdown_event():
-    SQLModel.metadata.drop_all(engine)
 
 @app.get("/")
 async def root() -> dict:
@@ -372,7 +364,6 @@ async def create_chapter(
 @cache_service.cache_decorator(CacheType.CHAPTER)
 async def get_all_chapters(
     textbook: TextbookDep,
-    chapter: ChapterCreate,
     session: SessionDep,
     offset: int = 0,
     limit: Annotated[int, Query(le=100)] = 100,
@@ -623,7 +614,10 @@ async def generate_quiz(
     ).all()
 
     if not conversations:
-        raise HTTPException(status_code=404, detail="No conversations found for this chapter")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No conversations found for this chapter"
+        )
     
     chapter_content = " ".join(
         f"{response.role}: {response.content}"
@@ -631,39 +625,48 @@ async def generate_quiz(
         for response in conversation.responses
     )
 
+        # Send the content to the AI to generate quiz questions
     quiz_data = await generate_quiz_questions(chapter_content)
+
+    # Attempt to load the generated JSON data
     try:
-        quiz_list = json.loads(quiz_data)
-        new_quiz = Quiz(
-            title=f"Quiz for {chapter.name}",
-            chapter_id=chapter.id,
-            created_at=datetime.utcnow()
-        )
-        session.add(new_quiz)
-        session.flush()
-
-        questions = []
-        for question in quiz_list:
-            new_question = Question(
-                quiz_id=new_quiz.id,
-                content=question["content"],
-                correct_answer=question["correct_answer"],
-                question_type=question.get("question_type", "open-ended")
-            )
-            session.add(new_question)
-            questions.append({
-                "content": question["content"],
-                "correct_answer": question["correct_answer"],
-                "question_type": question.get("question_type", "open-ended")
-            })
-
-        session.commit()
-        return {
-            "id": new_quiz.id,
-            "title": new_quiz.title,
-            "chapter_id": chapter.id,
-            "questions": questions
-        }
-
+        quiz_dict = json.loads(quiz_data)
     except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Failed to create a quiz for this chapter")
+        raise HTTPException(status_code=400, detail="Failed to create a quiz for this chapter.")
+
+    # Create the quiz in the database
+    new_quiz = Quiz(content=chapter.name, chapter_id=chapter.id)
+    session.add(new_quiz)
+    session.commit()
+    session.refresh(new_quiz)
+
+    # Add generated questions to the quiz
+    for question in quiz_dict:
+        new_question = Question(
+            quiz_id=new_quiz.id,
+            content=question["content"],
+            correct_answer=question["correct_answer"],
+            question_type=question.get("question_type", "open-ended")
+        )
+        session.add(new_question)
+    session.commit()
+
+    # Fetch all added questions for the response
+    questions = session.exec(
+        select(Question).where(Question.quiz_id == new_quiz.id)
+    ).all()
+
+    # Return a JSONResponse
+    return JSONResponse(
+        status_code=201,
+        content={
+            "message": "Quiz created successfully.",
+            "quiz": {
+                "title": new_quiz.content,
+                "questions": [
+                    {"content": question.content, "correct_answer": question.correct_answer}
+                    for question in questions
+                ]
+            }
+        }
+    )
